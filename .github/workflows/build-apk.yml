@@ -39,25 +39,25 @@ jobs:
           gradle --version
           echo "ANDROID_HOME=$ANDROID_HOME"
 
-      - name: Build release APK
+      - name: Build debug and release APKs
         run: |
           cd src
           set +e
           if [ -x ./gradlew ]; then CMD="./gradlew"; else CMD="gradle"; fi
-          $CMD assembleRelease --no-daemon --stacktrace > "$GITHUB_WORKSPACE/build.log" 2>&1
+          $CMD assembleDebug assembleRelease --no-daemon --stacktrace > "$GITHUB_WORKSPACE/build.log" 2>&1
           code=$?
           cat "$GITHUB_WORKSPACE/build.log"
           echo "BUILD_EXIT_CODE=$code" >> "$GITHUB_WORKSPACE/build.log"
           exit $code
 
-      - name: Collect APK
+      - name: Collect APKs
         run: |
           mkdir -p out
           find src/app/build/outputs/apk -name "*.apk" -exec cp {} out/ \;
           ls -lh out
-          sha256sum out/*.apk
+          sha256sum out/*.apk | tee "$GITHUB_WORKSPACE/checksums.txt"
 
-      - name: Upload artifact
+      - name: Upload artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -65,14 +65,18 @@ jobs:
           path: |
             out/*.apk
             build.log
+            checksums.txt
           if-no-files-found: warn
 
-      - name: Publish APK release
+      - name: Publish APKs to release
         if: success()
         uses: softprops/action-gh-release@v2
         with:
           tag_name: apk-${{ github.run_number }}
           name: CleanTV APK build ${{ github.run_number }}
-          body: Auto-built from zhbcher/CleanTV-With-ChildLock at ${{ github.sha }}
+          body: |
+            Auto-built from zhbcher/CleanTV-With-ChildLock at ${{ github.sha }}
+            app-release.apk: release variant (signed with debug key)
+            app-debug.apk: debug variant (debuggable)
           files: out/*.apk
           fail_on_unmatched_files: false
